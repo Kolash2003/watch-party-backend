@@ -93,6 +93,7 @@ async function transcode(job: Job) {
     await Promise.all([fs.rm(src, { force: true }), fs.rm(`${src}.json`, { force: true })]);
 }
 
+// maxStalledCount: a restart mid-job (deploy, crash) re-runs the job instead of failing it outright.
 const worker = new Worker('transcode', async (job) => {
     try {
         await transcode(job);
@@ -101,8 +102,12 @@ const worker = new Worker('transcode', async (job) => {
         if (final) await prisma.video.update({ where: { id: job.data.videoId }, data: { status: 'FAILED', errorMessage: (e as Error).message.slice(0, 500) } }).catch(() => {});
         throw e;
     }
-}, { connection: makeRedis(), concurrency: 1 });
+}, { connection: makeRedis(), concurrency: 1, maxStalledCount: 2 });
 
 worker.on('completed', (job) => logger.info('transcode done', { videoId: job.data.videoId }));
-worker.on('failed', (job, err) => logger.error('transcode failed', { videoId: job?.data.videoId, err: err.message }));
+worker.on('failed', (job, err) => {
+    logger.error('transcode failed', { videoId: job?.data.videoId, err: err.message });
+    // Stalled jobs never reach the processor's catch, so mark them here or the video sits in PROCESSING forever.
+    if (job && /stalled/.test(err.message)) prisma.video.update({ where: { id: job.data.videoId }, data: { status: 'FAILED', errorMessage: 'Transcoding was interrupted, please re-upload' } }).catch(() => {});
+});
 logger.info('Transcode worker started');
