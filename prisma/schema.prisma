@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  avatarUrl    String?
+  videos       Video[]
+  rooms        Room[]   @relation("HostRooms")
+  createdAt    DateTime @default(now())
+}
+
+enum VideoStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Video {
+  id           String      @id @default(cuid())
+  ownerId      String
+  owner        User        @relation(fields: [ownerId], references: [id])
+  title        String
+  status       VideoStatus @default(QUEUED)
+  progress     Int         @default(0)
+  durationSec  Int?
+  width        Int?
+  height       Int?
+  sizeBytes    BigInt?
+  renditions   String[]
+  hasSubtitles Boolean     @default(false)
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+  rooms        Room[]
+}
+
+model Room {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  hostId      String
+  host        User          @relation("HostRooms", fields: [hostId], references: [id])
+  videoId     String
+  video       Video         @relation(fields: [videoId], references: [id])
+  controlMode String        @default("HOST_ONLY")
+  closedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  messages    ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
+  userId    String
+  text      String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+
+  @@index([roomId, createdAt])
+}

@@ -1,0 +1,12 @@
+# Ports offset (5433/6380) so it doesn't clash with other local Postgres/Redis.
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_USER: wp, POSTGRES_PASSWORD: wp, POSTGRES_DB: watchparty }
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7
+    ports: ["6380:6379"]
+volumes:
+  pgdata:
